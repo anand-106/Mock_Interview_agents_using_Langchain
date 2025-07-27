@@ -1,5 +1,8 @@
 import express from "express";
 import { askGeminiRAG } from "./rag";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 

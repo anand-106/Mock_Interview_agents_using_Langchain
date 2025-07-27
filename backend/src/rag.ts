@@ -1,29 +1,30 @@
-import dotenv from "dotenv";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { HuggingFaceTransformersEmbeddings } from "@langchain/community/embeddings/huggingface_transformers";
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { createRetrievalChain } from "langchain/chains/retrieval";
 import { createStuffDocumentsChain } from "langchain/chains/combine_documents";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
-
-dotenv.config();
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 
 export async function askGeminiRAG(query: string) {
-  const docs = [
-    "LangChain enables LLMs to access tools, memory, and external data.",
-    "RAG combines retrieval with generation to answer questions using context.",
-    "Anand lives in Alappuzha.",
-  ];
+  const pdfPath =
+    "C:/Users/gamin/Documents/projects/Mock_Interview_agents_using_Langchain/backend/assets/Anand-S-Resume.pdf";
+
+  const loader = new PDFLoader(pdfPath);
+
+  const docs = await loader.load();
+
+  //   const docs = [
+  //     "LangChain enables LLMs to access tools, memory, and external data.",
+  //     "RAG combines retrieval with generation to answer questions using context.",
+  //     "Anand lives in Alappuzha.",
+  //   ];
 
   const embeddings = new HuggingFaceTransformersEmbeddings({
     model: "BAAI/bge-base-en-v1.5",
   });
 
-  const vectorStore = await MemoryVectorStore.fromTexts(
-    docs,
-    docs.map((_, i) => ({ id: i.toString() })),
-    embeddings
-  );
+  const vectorStore = await MemoryVectorStore.fromDocuments(docs, embeddings);
 
   const retriever = vectorStore.asRetriever();
 
