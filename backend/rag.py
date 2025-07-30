@@ -35,6 +35,31 @@ def resume_rag_embed(path:str):
     return retriver
     
 
+def resume_rag_chain(retriver):
+    load_dotenv()
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        temperature=0.3,
+    )
+    
+    prompt = ChatPromptTemplate.from_template(
+        """
+    Use the context below to answer the question.
+
+    Context:
+    {context}
+
+    Question:
+    {input}
+    """
+    )
+    
+    rag_chain  =  ({"context":retriver,"input":RunnablePassthrough()} | prompt | llm)
+
+    
+    
+    return rag_chain
 
 def resume_rag_llm(retriver,query):
     load_dotenv()
