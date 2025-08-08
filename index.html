@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Audio Stream for Original Backend</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f0f2f5;
+      }
+      button {
+        font-size: 1.2rem;
+        padding: 12px 24px;
+        margin: 10px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      #startButton {
+        background-color: #42b72a;
+        color: white;
+      }
+      #startButton:disabled {
+        background-color: #a5d6a7;
+      }
+      #stopButton {
+        background-color: #eb4034;
+        color: white;
+      }
+      #stopButton:disabled {
+        background-color: #ef9a9a;
+      }
+      #status {
+        font-size: 1.1rem;
+        color: #555;
+        height: 2em;
+        text-align: center;
+      }
+      .speaking {
+        color: #42b72a;
+        font-weight: bold;
+      }
+      .silence {
+        color: #eb4034;
+      }
+      .listening {
+        color: #1976d2;
+        font-weight: bold;
+      }
+      .processing {
+        color: #ff9800;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>VAD Frontend</h2>
+    <div id="status">Status: Idle</div>
+    <button id="startButton">Start Streaming</button>
+    <button id="stopButton" disabled>Stop Streaming</button>
+
+    <script>
+      const startButton = document.getElementById("startButton");
+      const stopButton = document.getElementById("stopButton");
+      const statusDiv = document.getElementById("status");
+
+      let audioContext;
+      let stream;
+      let workletNode;
+      let ws;
+      let shouldSendAudio = false; // Control audio sending
+
+      // This is the code for the AudioWorklet processor.
+      // It's defined as a string so we can create a Blob and load it dynamically.
+      const workletCode = `
+        class VADWorkletProcessor extends AudioWorkletProcessor {
+            constructor() {
+                super();
+                // Buffer to hold audio data until we have a full frame
+                this.buffer = new Float32Array(320);
+                this.bufferIndex = 0;
+            }
+
+            // This method is called by the browser with 128-sample chunks of audio data.
+            // The backend expects 320 samples (20ms at 16kHz) per frame.
+            // So, we buffer the incoming 128-sample chunks until we have enough data.
+            process(inputs, outputs, parameters) {
+                const inputChannel = inputs[0][0];
+
+                if (!inputChannel) {
+                    return true;
+                }
+
+                for (let i = 0; i < inputChannel.length; i++) {
+                    this.buffer[this.bufferIndex++] = inputChannel[i];
+
+                    // When the buffer is full (320 samples)
+                    if (this.bufferIndex === 320) {
+                        // Convert the Float32 buffer to 16-bit PCM
+                        const pcm16Data = new Int16Array(320);
+                        for (let j = 0; j < 320; j++) {
+                            let s = Math.max(-1, Math.min(1, this.buffer[j]));
+                            pcm16Data[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                        }
+
+                        // Send the 16-bit PCM data (as a raw buffer) back to the main thread
+                        this.port.postMessage(pcm16Data.buffer, [pcm16Data.buffer]);
+
+                        // Reset the buffer index
+                        this.bufferIndex = 0;
+                    }
+                }
+                
+                // Return true to keep the processor alive
+                return true;
+            }
+        }
+
+        registerProcessor('vad-worklet-processor', VADWorkletProcessor);
+    `;
+
+      // --- Main Functions ---
+
+      startButton.onclick = async () => {
+        try {
+          statusDiv.textContent = "Status: Initializing...";
+          startButton.disabled = true;
+
+          // 1. Create WebSocket connection
+          ws = new WebSocket("ws://localhost:8000/ws/audio");
+
+          ws.onopen = async () => {
+            statusDiv.textContent = "Status: Connecting to microphone...";
+
+            // 2. Create AudioContext
+            audioContext = new (window.AudioContext ||
+              window.webkitAudioContext)({
+              sampleRate: 16000, // MUST match backend sample rate
+            });
+
+            // 3. Get microphone stream
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const source = audioContext.createMediaStreamSource(stream);
+
+            // 4. Create the AudioWorklet from the string code
+            const blob = new Blob([workletCode], {
+              type: "application/javascript",
+            });
+            const workletURL = URL.createObjectURL(blob);
+            await audioContext.audioWorklet.addModule(workletURL);
+
+            // 5. Create the worklet node
+            workletNode = new AudioWorkletNode(
+              audioContext,
+              "vad-worklet-processor"
+            );
+
+            // 6. Set up the message handler to send data to the WebSocket
+            // ONLY send audio when shouldSendAudio is true
+            workletNode.port.onmessage = (event) => {
+              if (ws.readyState === WebSocket.OPEN && shouldSendAudio) {
+                ws.send(event.data);
+              }
+            };
+
+            // 7. Connect the audio pipeline
+            source.connect(workletNode);
+
+            statusDiv.textContent = "Status: Connected - Waiting for interview to start...";
+            stopButton.disabled = false;
+          };
+
+          // Listen for control messages from backend
+          ws.onmessage = (event) => {
+            // Only process text messages, ignore binary
+            if (event.data instanceof ArrayBuffer) {
+              return; // Ignore binary data
+            }
+            
+            const message = event.data;
+            
+            if (message === "START_LISTENING") {
+              shouldSendAudio = true;
+              statusDiv.innerHTML = '<span class="listening">🎤 Listening for your response...</span>';
+            } else if (message === "STOP_LISTENING") {
+              shouldSendAudio = false;
+              statusDiv.innerHTML = '<span class="processing">Processing your response...</span>';
+            } else if (message === "speaking") {
+              statusDiv.innerHTML = '<span class="speaking">Speaking...</span>';
+            } else if (message === "silence") {
+              statusDiv.innerHTML = '<span class="silence">Silence...</span>';
+            } else if (message === "end of speech") {
+              statusDiv.innerHTML = "<strong>End of Speech Detected!</strong>";
+            }
+          };
+
+          ws.onclose = () => {
+            console.log("Disconnected from backend");
+            stopStreaming();
+            statusDiv.textContent = "Status: Disconnected";
+          };
+
+          ws.onerror = (error) => {
+            console.error("WebSocket Error:", error);
+            stopStreaming();
+            statusDiv.textContent = "Status: Connection Error";
+          };
+        } catch (error) {
+          console.error("Error starting streaming:", error);
+          statusDiv.textContent = `Error: ${error.message}`;
+          startButton.disabled = false;
+        }
+      };
+
+      stopButton.onclick = () => {
+        stopStreaming();
+      };
+
+      function stopStreaming() {
+        shouldSendAudio = false; // Stop sending audio
+        
+        if (ws) {
+          ws.close();
+        }
+        if (workletNode) {
+          workletNode.port.close();
+          workletNode.disconnect();
+        }
+        if (audioContext) {
+          // Check state before closing to avoid errors
+          if (audioContext.state !== "closed") {
+            audioContext.close();
+          }
+        }
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+
+        startButton.disabled = false;
+        stopButton.disabled = true;
+        if (statusDiv.textContent !== "Status: Connection Error") {
+          statusDiv.textContent = "Status: Idle";
+        }
+      }
+    </script>
+  </body>
+</html>

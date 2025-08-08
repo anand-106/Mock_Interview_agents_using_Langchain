@@ -43,6 +43,7 @@ async def listen_for_speech(websocket:WebSocket):
     print("Talk Now")
     
     speech_started =False
+    first_speech = False
     
     while True:
         
@@ -70,6 +71,7 @@ async def listen_for_speech(websocket:WebSocket):
                 if speech_chunks ==1:
                     print("Speech Started")
                     speech_started=True
+                    first_speech =True
             
             if speech_started:
                 buffer +=frame
@@ -87,7 +89,7 @@ async def listen_for_speech(websocket:WebSocket):
                 sclience_window.clear()
                 speech_started = False
             
-            if len(sclience_window) == SCILENCE_LIMIT and not any(sclience_window) and speech_started:
+            if len(sclience_window) == SCILENCE_LIMIT and not any(sclience_window) and first_speech:
                 print("end of speech")
                 yield buffer
                 return
@@ -134,7 +136,8 @@ async def audio_ws(websocket:WebSocket):
             
             if current_node in {"HR", "TECH", "MANAGER","start","END"}:
                 print(f"\n👤 {current_node} says: {last_msg}")
-                audio_file = await text_to_speech(last_msg)  
+                audio_bytes = await text_to_speech(last_msg)
+                await websocket.send_bytes(audio_bytes)  
                 
                 if state.get("next_interviewer") == "CLOSED":
                     break
