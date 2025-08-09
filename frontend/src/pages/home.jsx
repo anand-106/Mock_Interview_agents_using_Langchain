@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MdCall } from "react-icons/md";
 import { MdCallEnd } from "react-icons/md";
 import { FaMicrophone } from "react-icons/fa";
+import { useNavigate } from 'react-router-dom';
 
 export function HomePage(){
     const mediaRecorderRef = useRef(null);
@@ -10,10 +11,93 @@ export function HomePage(){
     const [HRSpeaking,setHrSpeaking] = useState(false)
     const [TechSpeaking,setTechSpeaking] = useState(false)
     const [ManagerSpeaking,setManagerSpeaking] = useState(false)
+    const isConnectedRef = useRef(false)
+    const navigate  =  useNavigate()
 
-    const startInterview = ()=>{
-        const ws = new WebSocket('ws://localhost:8000/ws/audio')
-        wsRef.current = ws;
+
+    const startStreamingAudio = useCallback(async () => {
+        setIsMicON(true)
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioContext = new AudioContext({ sampleRate: 16000 });
+        const source = audioContext.createMediaStreamSource(stream);
+        
+        await audioContext.audioWorklet.addModule(
+            URL.createObjectURL(new Blob([`
+                class AudioProcessor extends AudioWorkletProcessor {
+                    constructor() {
+                        super();
+                        this.buffer = new Float32Array();
+                        this.bufferSize = 320; // 20ms at 16kHz = 320 samples
+                    }
+                    
+                    process(inputs, outputs, parameters) {
+                        const input = inputs[0];
+                        if (input.length > 0) {
+                            const inputData = input[0];
+                            
+                            // Accumulate data until we have 320 samples (20ms)
+                            const newBuffer = new Float32Array(this.buffer.length + inputData.length);
+                            newBuffer.set(this.buffer);
+                            newBuffer.set(inputData, this.buffer.length);
+                            this.buffer = newBuffer;
+                            
+                            // Send 320-sample chunks (640 bytes when converted to int16)
+                            while (this.buffer.length >= this.bufferSize) {
+                                const chunk = this.buffer.slice(0, this.bufferSize);
+                                this.buffer = this.buffer.slice(this.bufferSize);
+                                
+                                const pcm = new Int16Array(chunk.length);
+                                for (let i = 0; i < chunk.length; i++) {
+                                    const s = Math.max(-1, Math.min(1, chunk[i]));
+                                    pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                                }
+                                
+                                this.port.postMessage(pcm.buffer);
+                            }
+                        }
+                        return true;
+                    }
+                }
+                registerProcessor('audio-processor', AudioProcessor);
+            `], { type: 'application/javascript' }))
+        );
+
+        const processor = new AudioWorkletNode(audioContext, 'audio-processor');
+        source.connect(processor);
+        
+        processor.port.onmessage = (event) => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                console.log(`Sending ${event.data.byteLength} bytes`);
+                wsRef.current.send(event.data);
+            }
+        };
+
+        mediaRecorderRef.current = { audioContext, source, processor,stream };
+    },[]);
+
+    const stopStreamingAudio = useCallback(() => {
+        const recorder = mediaRecorderRef.current;
+        if (recorder) {
+            recorder.stream?.getTracks().forEach(track => track.stop());
+            recorder.processor?.disconnect();
+            recorder.source?.disconnect();
+            recorder.audioContext?.close();
+            setIsMicON(false)
+        }
+        mediaRecorderRef.current = null;
+    },[]);
+
+    useEffect(()=>{
+
+        if(isConnectedRef.current){
+            console.log("Websocket Already Connected")
+            return
+        }
+
+        let ws = null
+         ws = new WebSocket('ws://localhost:8000/ws/audio')
+        wsRef.current = ws; 
+        isConnectedRef.current = true
 
         ws.onopen = ()=>{
             console.log("WEBSOCKET CONNECTED")
@@ -62,85 +146,61 @@ export function HomePage(){
             }
         }
 
-
-        ws.onclose = ()=>{
-            console.log("Web Socket Connected")
-            stopStreamingAudio();
-        }
-
-        const startStreamingAudio = async () => {
-            setIsMicON(true)
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const audioContext = new AudioContext({ sampleRate: 16000 });
-            const source = audioContext.createMediaStreamSource(stream);
-            
-            await audioContext.audioWorklet.addModule(
-                URL.createObjectURL(new Blob([`
-                    class AudioProcessor extends AudioWorkletProcessor {
-                        constructor() {
-                            super();
-                            this.buffer = new Float32Array();
-                            this.bufferSize = 320; // 20ms at 16kHz = 320 samples
-                        }
-                        
-                        process(inputs, outputs, parameters) {
-                            const input = inputs[0];
-                            if (input.length > 0) {
-                                const inputData = input[0];
-                                
-                                // Accumulate data until we have 320 samples (20ms)
-                                const newBuffer = new Float32Array(this.buffer.length + inputData.length);
-                                newBuffer.set(this.buffer);
-                                newBuffer.set(inputData, this.buffer.length);
-                                this.buffer = newBuffer;
-                                
-                                // Send 320-sample chunks (640 bytes when converted to int16)
-                                while (this.buffer.length >= this.bufferSize) {
-                                    const chunk = this.buffer.slice(0, this.bufferSize);
-                                    this.buffer = this.buffer.slice(this.bufferSize);
-                                    
-                                    const pcm = new Int16Array(chunk.length);
-                                    for (let i = 0; i < chunk.length; i++) {
-                                        const s = Math.max(-1, Math.min(1, chunk[i]));
-                                        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-                                    }
-                                    
-                                    this.port.postMessage(pcm.buffer);
-                                }
-                            }
-                            return true;
-                        }
-                    }
-                    registerProcessor('audio-processor', AudioProcessor);
-                `], { type: 'application/javascript' }))
-            );
-
-            const processor = new AudioWorkletNode(audioContext, 'audio-processor');
-            source.connect(processor);
-            
-            processor.port.onmessage = (event) => {
-                if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    console.log(`Sending ${event.data.byteLength} bytes`);
-                    wsRef.current.send(event.data);
-                }
-            };
-
-            mediaRecorderRef.current = { audioContext, source, processor };
-        };
-        
-        const stopStreamingAudio = () => {
-            const recorder = mediaRecorderRef.current;
-            if (recorder) {
-                recorder.processor?.disconnect();
-                recorder.source?.disconnect();
-                recorder.audioContext?.close();
-                setIsMicON(false)
-            }
-        };
-
         ws.onerror = (err) => console.error('WebSocket error:', err);
         ws.onclose = () => console.log('WebSocket closed');
+
+        
+        const handleUnload = () => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.close(1000, 'Page refresh');
+            }
+        };
+        
+        window.addEventListener('beforeunload', handleUnload);
+
+        return () => {
+            console.log("Cleaning up WebSocket connection...");
+            stopStreamingAudio();
+            
+            if (ws) {
+                
+                ws.onopen = null;
+                ws.onmessage = null;
+                ws.onerror = null;
+                ws.onclose = null;
+                
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                    ws.close(1000, 'Component unmounting');
+                }
+            }
+            wsRef.current.close()
+            wsRef.current = null;
+            isConnectedRef.current = false
+            
+            window.removeEventListener('beforeunload', handleUnload);
+        };
+    },[])
+
+    const handleEnd = ()=>{
+        
     }
+
+    const startInterview = useCallback(()=>{
+        
+        const ws =wsRef.current
+        if(ws?.readyState === WebSocket.OPEN){
+            ws.send("START")
+        }
+        
+
+    },[])
+
+    const endInterview = useCallback(()=>{
+        const ws =wsRef.current
+        if(ws?.readyState === WebSocket.OPEN){
+            ws.send("END")
+        }
+    },[])
 
 
     return <div className="flex flex-col gap-2  items-center h-screen bg-[#030617] text-white px-4">

@@ -8,6 +8,7 @@ from tts import text_to_speech
 from agent import interview_graph
 import warnings
 import asyncio
+from starlette.websockets import WebSocketState
 warnings.filterwarnings("ignore", category=UserWarning, module="webrtcvad")
 
 
@@ -46,6 +47,10 @@ async def listen_for_speech(websocket:WebSocket):
     first_speech = False
     
     while True:
+
+        if websocket.client_state != WebSocketState.CONNECTED:
+                print("WebSocket closed by client")
+                break
         
         chunk = await websocket.receive_bytes()
     
@@ -98,79 +103,113 @@ async def listen_for_speech(websocket:WebSocket):
 
 @app.websocket("/ws/audio")
 async def audio_ws(websocket:WebSocket):
-    
-    print("Trying to accept websocket...")
-    
-    await websocket.accept()
-    print("websocket Connected")
-    
-    retriever = resume_rag_embed(
-        r"C:\Users\gamin\Documents\projects\Mock_Interview_agents_using_Langchain\backend\assets\Anand-S-Resume.pdf"
-    )
-    
-    graph = interview_graph()
 
-    state = {
-        "messages": [],
-        "turns": 0,
-        "last_msg": "",
-        "retriever": retriever,
-    }
+    try:
+    
+        print("Trying to accept websocket...")
+        
+        await websocket.accept()
+        print("websocket Connected")
+        
+        retriever = resume_rag_embed(
+            r"C:\Users\gamin\Documents\projects\Mock_Interview_agents_using_Langchain\backend\assets\Anand-S-Resume.pdf"
+        )
+        
+        graph = interview_graph()
 
-    stream = graph.stream(state) 
-    
-    buffer = b""
-    
-    
-    while True:
-        try:
-            step = next(stream)
-            current_node, current_state = list(step.items())[0]
-            state = current_state  
-            
-            if "messages" not in state or not state["messages"]:
-                print("\n⚠️ No message returned. Skipping.")
-                continue
-            
-            last_msg = state["messages"][-1]["text"]
-            
-            if current_node in {"HR", "TECH", "MANAGER","start","END"}:
-                print(f"\n👤 {current_node} says: {last_msg}")
-                audio_bytes = await text_to_speech(last_msg)
-                await websocket.send_text(current_node)
-                await websocket.send_bytes(audio_bytes)  
-                
-                if state.get("next_interviewer") == "CLOSED":
+        state = {
+            "messages": [],
+            "turns": 0,
+            "last_msg": "",
+            "retriever": retriever,
+        }
+
+        stream = graph.stream(state) 
+        
+        buffer = b""
+        
+        
+        while True:
+            if websocket.client_state != WebSocketState.CONNECTED:
+                print("WebSocket closed by client")
+                break
+            try:
+                data = await websocket.receive_text()
+                if data == "START":
+                    print("Interview Starting...")
+                    while True:
+                        try:
+                            step = next(stream)
+                            current_node, current_state = list(step.items())[0]
+                            state = current_state  
+                            
+                            if "messages" not in state or not state["messages"]:
+                                print("\n⚠️ No message returned. Skipping.")
+                                continue
+                            
+                            last_msg = state["messages"][-1]["text"]
+                            
+                            if current_node in {"HR", "TECH", "MANAGER","start","END"}:
+                                print(f"\n👤 {current_node} says: {last_msg}")
+                                audio_bytes = await text_to_speech(last_msg)
+                                await websocket.send_text(current_node)
+                                await websocket.send_bytes(audio_bytes)  
+                                
+                                if state.get("next_interviewer") == "CLOSED":
+                                    print("Interview Ended By the System")
+                                    break
+                                
+                                if current_node in {"HR", "TECH", "MANAGER","start"}:
+                                    
+                                    await websocket.send_text("START_LISTENING")
+                                    print("listening Started")
+                                    
+                                    transcription = ""
+                                    
+                                    async for chunk in listen_for_speech(websocket=websocket):
+                                        partial_transcription = speech_to_text(chunk)
+                                        
+                                        transcription += partial_transcription
+                                        print(f"→ {partial_transcription}")
+                                        
+                                    
+                                    print(f"Me: {transcription}")
+                                    
+
+                                    await websocket.send_text("STOP_LISTENING")
+                                    
+                                        
+                                    state["messages"].append({"role": "candidate", "text": transcription})
+                                    state["last_msg"] = transcription
+                                
+                        except StopIteration:
+                            print("Interview Completed")
+                            break
+                                
+                        except Exception as e:
+                            print(e)
+                            
+                            break
+                    
+                    await websocket.send_text("END")
                     break
-                
-                if current_node in {"HR", "TECH", "MANAGER","start"}:
-                    
-                    await websocket.send_text("START_LISTENING")
-                    print("listening Started")
-                    
-                    transcription = ""
-                    
-                    async for chunk in listen_for_speech(websocket=websocket):
-                        partial_transcription = speech_to_text(chunk)
-                        
-                        transcription += partial_transcription
-                        print(f"→ {partial_transcription}")
-                        
-                    
-                    print(f"Me: {transcription}")
-                       
-
-                    await websocket.send_text("STOP_LISTENING")
-                    
-                        
-                    state["messages"].append({"role": "candidate", "text": transcription})
-                    state["last_msg"] = transcription
-                   
-        except Exception as e:
-            print(e)
-            
-            break
+                elif data == "END":
+                    print("Interview stopped by user")
+                    break
+            except Exception as e:
+                print(f'Error recieveing Data {e}')
     
-    await websocket.close()
+    except Exception as e:
+        print(f'error connecting to websocket {e}')
+    finally:
+        try:
+            await websocket.close()
+        except :
+            pass
+
+    
+
+    
+
         
         
