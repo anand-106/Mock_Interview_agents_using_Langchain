@@ -137,6 +137,7 @@ async def audio_ws(websocket:WebSocket):
             if current_node in {"HR", "TECH", "MANAGER","start","END"}:
                 print(f"\n👤 {current_node} says: {last_msg}")
                 audio_bytes = await text_to_speech(last_msg)
+                await websocket.send_text(current_node)
                 await websocket.send_bytes(audio_bytes)  
                 
                 if state.get("next_interviewer") == "CLOSED":

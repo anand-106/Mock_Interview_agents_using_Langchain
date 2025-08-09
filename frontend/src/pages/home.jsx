@@ -1,8 +1,15 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { MdCall } from "react-icons/md";
+import { MdCallEnd } from "react-icons/md";
+import { FaMicrophone } from "react-icons/fa";
 
 export function HomePage(){
     const mediaRecorderRef = useRef(null);
     const wsRef = useRef(null);
+    const [isMicON,setIsMicON] = useState(false)
+    const [HRSpeaking,setHrSpeaking] = useState(false)
+    const [TechSpeaking,setTechSpeaking] = useState(false)
+    const [ManagerSpeaking,setManagerSpeaking] = useState(false)
 
     const startInterview = ()=>{
         const ws = new WebSocket('ws://localhost:8000/ws/audio')
@@ -17,6 +24,15 @@ export function HomePage(){
                 if(event.data === "STOP_LISTENING"){
                     console.log("Stopped Audio Listening")
                     stopStreamingAudio();
+                }
+                if(event.data == "HR" || event.data == "start"){
+                    setHrSpeaking(true)
+                }
+                if(event.data == "TECH"){
+                    setTechSpeaking(true)
+                }
+                if(event.data == "MANAGER"){
+                    setManagerSpeaking(true)
                 }
             }
             else if(event.data instanceof Blob){
@@ -33,6 +49,9 @@ export function HomePage(){
 
                 audio.onended = () => {
                     console.log("Audio finished, starting to listen...");
+                    setHrSpeaking(false)
+                    setManagerSpeaking(false)
+                    setTechSpeaking(false)
                     startStreamingAudio();
                 };
 
@@ -50,6 +69,7 @@ export function HomePage(){
         }
 
         const startStreamingAudio = async () => {
+            setIsMicON(true)
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const audioContext = new AudioContext({ sampleRate: 16000 });
             const source = audioContext.createMediaStreamSource(stream);
@@ -114,6 +134,7 @@ export function HomePage(){
                 recorder.processor?.disconnect();
                 recorder.source?.disconnect();
                 recorder.audioContext?.close();
+                setIsMicON(false)
             }
         };
 
@@ -122,16 +143,37 @@ export function HomePage(){
     }
 
 
-    return <div className="flex flex-col gap-2 justify-center items-center h-screen">
-        <div className="" >
-
-        <h1>Interview AI</h1>
+    return <div className="flex flex-col gap-2  items-center h-screen bg-[#030617] text-white px-4">
+        <Header />
+        <div className="w-full h-4/5 border border-white/50 rounded-2xl  flex justify-evenly items-center ">
+        <AgentAvatar name={"HR Manager"}  isSpeaking={HRSpeaking}/>
+        <AgentAvatar name={"Tech Lead"} isSpeaking={TechSpeaking} />
+        <AgentAvatar name={"Hiring Manager"} isSpeaking={ManagerSpeaking} />
         </div>
-        <div className="w-full h-4/5 border-2 rounded-2xl ">
+        <div className='flex justify-center items-center gap-5 mt-2' >
 
+        <div onClick={startInterview} className="cursor-pointer h-10 w-20 rounded-3xl bg-green-500 flex justify-center items-center" >
+            <MdCall color='white' size={30} className='h-full' />
         </div>
-        <div>
-            <button onClick={startInterview} className="cursor-pointer h-10 w-28 rounded-xl bg-black text-white" >Start Interview</button>
+        <div  className={`cursor-pointer h-10 w-10 rounded-full bg-white/20 flex justify-center items-center ${isMicON?"border-2 border-green-400":""}`} >
+            <FaMicrophone color='white' size={12} className='h-full' />
+        </div>
+        <div  className="cursor-pointer h-10 w-20 rounded-3xl bg-red-500 flex justify-center items-center" >
+            <MdCallEnd color='white' size={30} className='h-full' />
+        </div>
         </div>
     </div>
+}
+
+function Header(){
+    return <div className="flex w-full items-center pt-4 pl-2 mb-4" >
+
+    <h1 className='font-bold text-2xl'>Mockcruiter</h1>
+    </div>
+}
+
+function AgentAvatar({name,isSpeaking}){
+return <div className={`bg-white/10 rounded-xl h-[300px] w-[300px] flex justify-center items-center ${isSpeaking?"border-2 border-green-400":""}`}>
+<h1 className='font-semibold text-lg'>{name}</h1>
+</div>
 }
