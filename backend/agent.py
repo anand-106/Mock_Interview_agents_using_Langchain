@@ -10,6 +10,7 @@ class InterviewState(TypedDict,total=False):
     last_msg:str
     retriever:Any
     next_interviewer:str
+    report:str
     
 def start_node(state:InterviewState):
     state["messages"]=[]
@@ -131,7 +132,7 @@ def analysis_node(state: InterviewState):
     
     {state['messages']}
     
-    Provide a brief analysis of the candidate's performance including:
+    Provide a **Markdown-formatted** analysis of the candidate's performance including:
     - Strengths
     - Weaknesses
     - Areas of improvement
@@ -145,6 +146,7 @@ def analysis_node(state: InterviewState):
 
     print("\n📋 Interview Analysis Report:\n")
     print(result.content)
+    state["report"]=result.content
     return state
 
 

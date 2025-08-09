@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MdCall } from "react-icons/md";
 import { MdCallEnd } from "react-icons/md";
 import { FaMicrophone } from "react-icons/fa";
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export function HomePage(){
+    
     const mediaRecorderRef = useRef(null);
     const wsRef = useRef(null);
     const [isMicON,setIsMicON] = useState(false)
@@ -13,6 +14,7 @@ export function HomePage(){
     const [ManagerSpeaking,setManagerSpeaking] = useState(false)
     const isConnectedRef = useRef(false)
     const navigate  =  useNavigate()
+    const location = useLocation()
 
 
     const startStreamingAudio = useCallback(async () => {
@@ -95,7 +97,8 @@ export function HomePage(){
         }
 
         let ws = null
-         ws = new WebSocket('ws://localhost:8000/ws/audio')
+        const session_id = location.state?.id
+         ws = new WebSocket(`ws://localhost:8000/ws/${session_id}`)
         wsRef.current = ws; 
         isConnectedRef.current = true
 
@@ -109,14 +112,30 @@ export function HomePage(){
                     console.log("Stopped Audio Listening")
                     stopStreamingAudio();
                 }
-                if(event.data == "HR" || event.data == "start"){
+                else if(event.data == "HR" || event.data == "start"){
                     setHrSpeaking(true)
                 }
-                if(event.data == "TECH"){
+                else if(event.data == "TECH"){
                     setTechSpeaking(true)
                 }
-                if(event.data == "MANAGER"){
+                else if(event.data == "MANAGER"){
                     setManagerSpeaking(true)
+                }
+                else if(event.data == "END"){
+                    console.log("end of interview")
+                }
+                else if(event.data == "start")
+                {
+
+                }
+                else if(event.data == "START_LISTENING")
+                    {
+    
+                    }
+                else{
+                    stopStreamingAudio()
+
+                    navigate("/report",{state:{report:event.data}})
                 }
             }
             else if(event.data instanceof Blob){
@@ -181,9 +200,7 @@ export function HomePage(){
         };
     },[])
 
-    const handleEnd = ()=>{
-        
-    }
+    
 
     const startInterview = useCallback(()=>{
         
