@@ -5,6 +5,8 @@
   <a href="#"><img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"></a>
   <a href="#"><img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React"></a>
   <a href="#"><img src="https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Langchain-3498DB?style=for-the-badge" alt="Langchain"></a>
+  <a href="#"><img src="https://img.shields.io/badge/Langgraph-0A0A0A?style=for-the-badge" alt="Langgraph"></a>
 </p>
 
 ## Introduction
