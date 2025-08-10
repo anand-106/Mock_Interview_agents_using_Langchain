@@ -242,7 +242,7 @@ export function HomePage(){
     </div>
 }
 
-function Header(){
+export function Header(){
     return <div className="flex w-full items-center pt-4 pl-2 mb-4" >
 
     <h1 className='font-bold text-2xl'>Mockcruiter</h1>

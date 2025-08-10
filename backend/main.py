@@ -138,6 +138,9 @@ async def audio_ws(websocket:WebSocket,session_id:str):
             "turns": 0,
             "last_msg": "",
             "retriever": retriever,
+            "job_role": user_data[session_id]["role"],
+            "company": user_data[session_id]["company"], 
+            "job_details": user_data[session_id]["details"]
         }
 
         stream = graph.stream(state) 
@@ -252,7 +255,7 @@ async def upload_resume(file:UploadFile =File(...),role:str=Form(...),company:st
 
 
 
-    pprint(user_data)
+    # pprint(user_data)
 
     return {"id":session_id}
 

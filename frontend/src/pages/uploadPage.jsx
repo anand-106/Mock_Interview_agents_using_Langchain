@@ -1,16 +1,19 @@
-import { useState } from "react"
-
+import { useRef, useState } from "react"
+import { IoMdCloudUpload } from "react-icons/io";
 import axios from "axios"
 import { useNavigate } from "react-router-dom"
+
 
 
 export function UploadPage(){
 
     const [file,setFile] = useState(null)
-    const [jobRole,setJobrole] = useState(null)
-    const [companyName,setCompanyName] = useState(null)
-    const [jobDetails,setJobDetails] = useState(null)
+    const [jobRole,setJobrole] = useState("")
+    const [companyName,setCompanyName] = useState("")
+    const [jobDetails,setJobDetails] = useState("")
     const navigate = useNavigate()
+    const fileInputRef = useRef(null)
+    const [filename, setFileName] = useState("Upload Resume")
 
     const handleFileUpload = ()=>{
         if(!file){
@@ -38,27 +41,53 @@ export function UploadPage(){
     }
 
 
-    return <div className="w-full h-full flex flex-col">
+    return <div className="w-full h-screen flex flex-col bg-[#030617] text-white justify-center items-center">
+        <div className="w-full mb-14 flex justify-center items-center">
+        <h1 className='font-bold text-5xl'>Mockcruiter</h1>
+        </div>
+        <div className="flex justify-start items-center gap-2 flex-col bg-slate-800/50 border border-white/20 p-4  w-[500px] rounded-2xl">
+        <div className="bg-white/10 w-full h-[100px] flex flex-col justify-center items-center outline-0 rounded-lg cursor-pointer"
+        onClick={()=>fileInputRef.current.click()}
+        >
+
+
+        <IoMdCloudUpload size={25} />
+        <label>{filename}</label>
         <input type="file" accept="application/pdf" 
-        className="cursor-pointer"
+        className="cursor-pointer mr-[-100px] hidden"
+        ref={fileInputRef}
         onChange={(e)=>{
             setFile(e.target.files[0])
+            setFileName(e.target.files[0].name)
         }}
+        
         />
-
-        <input placeholder="Job Role" value={jobRole} onChange={(e)=>{
+        </div>
+        <input 
+        className="bg-white/10 w-full h-[44px] outline-0 rounded-lg  pl-3"
+        placeholder="Job Role" value={jobRole} onChange={(e)=>{
             setJobrole(e.target.value)
         }}/>
-        <input placeholder="Company Name" value={companyName} onChange={(e)=>{
+        
+        <input 
+        className="bg-white/10 w-full h-[44px] outline-0 rounded-lg  pl-3"
+
+        placeholder="Company Name" value={companyName} onChange={(e)=>{
             setCompanyName(e.target.value)
         }}/>
 
-        <textarea placeholder="Enter other details" className="h-[300px] w-[500px]" onChange={(e=>{
+        <textarea
+        className="bg-white/10 w-full h-[150px] outline-0 resize-none rounded-lg  p-3"
+        placeholder="Enter other details" onChange={(e=>{
             setJobDetails(e.target.value)
         })}
         value={jobDetails}
         />
 
-        <button onClick={handleFileUpload} >Start Interview</button>
+        <button 
+        className="bg-white text-black font-semibold text-[17px] cursor-pointer  w-full h-[44px] outline-0 rounded-lg  pl-3"
+        
+        onClick={handleFileUpload} >Start Interview</button>
+        </div>
     </div>
 }
