@@ -1,4 +1,4 @@
-# <p align="center">Mock Interview Platform using AI Agents</p>
+# <p align="center">Mockcruiter - Mock Interview Platform using AI Agents</p>
 
 <p align="center">
   <a href="#"><img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI"></a>
@@ -9,7 +9,7 @@
 
 ## Introduction
 
-The Virtual Interview Simulator is a platform designed to simulate job interviews. It allows users to upload their resume and practice answering interview questions generated dynamically based on their qualifications and the job requirements. The application utilizes real-time audio streaming and a sophisticated backend powered by Langchain and LLMs to create a realistic and interactive interview experience.
+Mockcruiter is a platform designed to simulate job interviews. It allows users to upload their resume and practice answering interview questions generated dynamically based on their qualifications and the job requirements. The application utilizes real-time audio streaming and a sophisticated backend powered by Langchain and LLMs to create a realistic and interactive interview experience.
 
 ## Table of Contents
 
