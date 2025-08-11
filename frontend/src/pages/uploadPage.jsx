@@ -42,8 +42,9 @@ export function UploadPage(){
 
 
     return <div className="w-full h-screen flex flex-col bg-[#030617] text-white justify-center items-center">
-        <div className="w-full mb-14 flex justify-center items-center">
+        <div className="w-full mb-7 flex flex-col gap-3 justify-center items-center">
         <h1 className='font-bold text-5xl'>Mockcruiter</h1>
+        <h1>Your personal AI interviewer — anytime, anywhere.</h1>
         </div>
         <div className="flex justify-start items-center gap-2 flex-col bg-slate-800/50 border border-white/20 p-4  w-[500px] rounded-2xl">
         <div className="bg-white/10 w-full h-[100px] flex flex-col justify-center items-center outline-0 rounded-lg cursor-pointer"
